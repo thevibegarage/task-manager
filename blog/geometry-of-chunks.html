@@ -1,0 +1,869 @@
+<title>The Geometry of Chunks</title>
+<meta name="description" content="A plain-language guide to chunking strategies for RAG, matched to use cases and industries.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Schibsted+Grotesk:wght@500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']], tags: 'ams' },
+    svg: { fontCache: 'global' },
+    options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js" defer></script>
+<style>
+  :root {
+    --ground: #F2F5F4;
+    --surface: #FAFBFB;
+    --sunken: #E7ECEA;
+    --ink: #14201D;
+    --ink-2: #33423E;
+    --muted: #5E6D68;
+    --rule: #D3DBD8;
+    --accent: #2B47D1;
+    --accent-soft: #DDE3FB;
+    --ochre: #9A5F05;
+    --ochre-soft: #F6EBD6;
+    --c1: #2B47D1;
+    --c2: #0F8A6E;
+    --c3: #B5541A;
+    --c4: #7A3FB8;
+    --good: #0F7A55;
+    --warn: #A15C00;
+    --bad: #B3261E;
+    --serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+    --sans: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #0D1211;
+      --surface: #131A18;
+      --sunken: #1A2320;
+      --ink: #E2E9E6;
+      --ink-2: #C3CECA;
+      --muted: #93A29D;
+      --rule: #27322F;
+      --accent: #93A6FF;
+      --accent-soft: #1E2748;
+      --ochre: #E9B25A;
+      --ochre-soft: #2A2112;
+      --c1: #93A6FF;
+      --c2: #4FD1AE;
+      --c3: #F0955A;
+      --c4: #C39BF2;
+      --good: #4FD1AE;
+      --warn: #E9B25A;
+      --bad: #FF8A80;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0D1211;
+    --surface: #131A18;
+    --sunken: #1A2320;
+    --ink: #E2E9E6;
+    --ink-2: #C3CECA;
+    --muted: #93A29D;
+    --rule: #27322F;
+    --accent: #93A6FF;
+    --accent-soft: #1E2748;
+    --ochre: #E9B25A;
+    --ochre-soft: #2A2112;
+    --c1: #93A6FF;
+    --c2: #4FD1AE;
+    --c3: #F0955A;
+    --c4: #C39BF2;
+    --good: #4FD1AE;
+    --warn: #E9B25A;
+    --bad: #FF8A80;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.65;
+    padding-inline: 20px;
+    padding-block: 0 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .layout {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 56px;
+  }
+  .toc {
+    position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + 24px);
+    align-self: start;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    padding-block: 32px;
+    font-family: var(--sans);
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+  .toc h2 { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .toc a { display: block; color: var(--ink-2); text-decoration: none; padding: 4px 8px; border-left: 2px solid transparent; }
+  .toc a:hover { color: var(--accent); border-left-color: var(--accent); }
+  .toc .sub a { padding-left: 20px; font-size: 13px; color: var(--muted); }
+  .toc .sub a:hover { color: var(--accent); }
+
+  article { max-width: 720px; min-width: 0; padding-block: 32px; }
+  .wide { max-width: none; }
+
+  header.hero { padding-block: 24px 16px; border-bottom: 1px solid var(--rule); margin-bottom: 40px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: clamp(40px, 6.4vw, 68px);
+    line-height: 1.02;
+    letter-spacing: -0.025em;
+    margin: 12px 0 18px;
+    text-wrap: balance;
+  }
+  h1 em { font-style: normal; color: var(--accent); }
+  .dek { font-size: 21px; line-height: 1.5; color: var(--ink-2); margin: 0 0 20px; max-width: 62ch; }
+  .byline { font-family: var(--sans); font-size: 13.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 18px; }
+
+  .ruler-wrap { margin-block: 28px 8px; overflow-x: auto; }
+  .ruler-wrap svg { display: block; min-width: 620px; width: 100%; height: auto; }
+  .figcap { font-family: var(--sans); font-size: 13px; color: var(--muted); line-height: 1.5; margin-top: 8px; }
+
+  h2.sec {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 32px;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    margin: 72px 0 8px;
+    text-wrap: balance;
+    scroll-margin-top: 24px;
+  }
+  .secnum { font-family: var(--mono); font-size: 13px; font-weight: 400; color: var(--accent); display: block; letter-spacing: .04em; margin-bottom: 6px; }
+  h3 {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 24px;
+    line-height: 1.2;
+    margin: 56px 0 6px;
+    letter-spacing: -0.01em;
+    scroll-margin-top: 24px;
+    text-wrap: balance;
+  }
+  h4 { font-family: var(--sans); font-weight: 600; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 30px 0 8px; }
+  p { margin: 0 0 1.05em; }
+  ul, ol.plain { padding-left: 1.2em; margin: 0 0 1.1em; }
+  li { margin-bottom: .35em; }
+  strong { font-weight: 600; }
+  .muted { color: var(--muted); }
+
+  code { font-family: var(--mono); font-size: .84em; background: var(--sunken); padding: .1em .35em; border-radius: 3px; }
+  pre {
+    font-family: var(--mono);
+    font-size: 13.5px;
+    line-height: 1.6;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 0 0 1.4em;
+    color: var(--ink-2);
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  pre .c { color: var(--muted); font-style: italic; }
+  pre .k { color: var(--accent); }
+
+  mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; max-width: 100%; padding-block: 4px; margin: 1em 0 !important; }
+  mjx-container { color: var(--ink); }
+
+  /* Strategy spec strip */
+  .spec {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--rule);
+    margin: 14px 0 26px;
+    font-family: var(--sans);
+  }
+  .spec div { padding: 10px 14px 12px 0; }
+  .spec div + div { padding-left: 14px; border-left: 1px solid var(--rule); }
+  .spec dt { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 3px; }
+  .spec dd { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink); }
+  .spec dd.mono { font-family: var(--mono); font-size: 13px; }
+
+  /* Derived rule callout */
+  .rule-box {
+    background: var(--ochre-soft);
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin: 1.4em 0 1.6em;
+  }
+  .rule-box .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ochre); display: block; margin-bottom: 4px; font-weight: 600; }
+  .rule-box p:last-child { margin-bottom: 0; }
+
+  .note {
+    font-size: 15.5px;
+    color: var(--ink-2);
+    border-left: 2px solid var(--rule);
+    padding-left: 16px;
+    margin: 1.2em 0 1.4em;
+  }
+
+  /* Use-case table under each strategy */
+  .tbl-wrap { overflow-x: auto; margin: 0 0 1.6em; }
+  table { border-collapse: collapse; width: 100%; font-family: var(--sans); font-size: 14px; line-height: 1.45; }
+  th { text-align: left; font-weight: 600; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 8px 12px 8px 0; border-bottom: 1px solid var(--ink); vertical-align: bottom; }
+  td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink-2); }
+  td:first-child { color: var(--ink); font-weight: 600; }
+  td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; }
+  .matrix td, .matrix th { padding-right: 16px; }
+  .matrix { min-width: 880px; }
+  .matrix td:nth-child(3) { color: var(--accent); font-weight: 600; }
+  .matrix td .p { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+
+  .fit { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 3px; font-weight: 600; white-space: nowrap; }
+  .fit.hi { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+  .fit.md { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+  .fit.lo { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+
+  .heat { min-width: 820px; }
+  .heat th { text-align: center; padding: 8px 4px; }
+  .heat th:first-child { text-align: left; }
+  .heat td { text-align: center; padding: 8px 4px; font-family: var(--mono); font-size: 12px; font-weight: 600; }
+  .heat td:first-child { text-align: left; font-family: var(--sans); font-size: 13.5px; }
+  .h3c { background: color-mix(in srgb, var(--accent) 34%, transparent); color: var(--ink); }
+  .h2c { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--ink-2); }
+  .h1c { color: var(--muted); font-weight: 400 !important; }
+
+  /* Lab */
+  .lab { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 22px; margin: 20px 0 28px; font-family: var(--sans); }
+  .lab-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px 22px; margin-bottom: 20px; }
+  .lab label { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-2); margin-bottom: 6px; gap: 8px; }
+  .lab label output { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+  .lab input[type=range] { width: 100%; accent-color: var(--accent); }
+  .lab select { width: 100%; font: inherit; font-size: 14px; padding: 6px 8px; background: var(--ground); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; }
+  .readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin-bottom: 18px; }
+  .readout div { padding: 12px 12px 12px 0; }
+  .readout div + div { border-left: 1px solid var(--rule); padding-left: 12px; }
+  .readout .v { font-family: var(--mono); font-size: 20px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .readout .k { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px; }
+  .chart h5 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .chart svg { width: 100%; height: auto; display: block; }
+  .chart .ax { stroke: var(--rule); }
+  .chart .axt { fill: var(--muted); font-family: var(--mono); font-size: 10px; }
+  .chart .grid { stroke: var(--rule); stroke-dasharray: 2 3; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+
+  .mermaid-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 16px; margin: 16px 0 24px; }
+  pre.mermaid { background: none; border: 0; padding: 0; margin: 0; font-family: var(--sans); color: var(--ink); }
+
+  .refs { font-size: 15px; color: var(--ink-2); padding-left: 1.4em; }
+  .refs li { margin-bottom: .6em; }
+
+  .mobile-toc { display: none; }
+
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .toc { display: none; }
+    .mobile-toc { display: block; font-family: var(--sans); font-size: 14px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin: 0 0 32px; padding-block: 10px; }
+    .mobile-toc summary { cursor: pointer; font-weight: 600; color: var(--ink-2); }
+    .mobile-toc ol { margin: 10px 0 4px; padding-left: 1.2em; }
+    .mobile-toc a { color: var(--ink-2); text-decoration: none; }
+    article { margin: 0 auto; }
+  }
+  @media (max-width: 640px) {
+    body { font-size: 17px; padding-inline: 16px; }
+    .spec { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .spec div:nth-child(3) { padding-left: 0; border-left: 0; }
+    .spec div:nth-child(n+3) { border-top: 1px solid var(--rule); }
+    h2.sec { font-size: 27px; }
+    h3 { font-size: 21px; }
+    .dek { font-size: 19px; }
+    .lab { padding: 16px; }
+  }
+</style>
+
+<div class="layout">
+  <nav class="toc" aria-label="Contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#problem">Why chunking matters</a></li>
+      <li><a href="#laws">Three rules of thumb</a></li>
+      <li><a href="#lab">Try it yourself</a></li>
+      <li><a href="#strategies">Eleven ways to chunk</a></li>
+      <li class="sub"><a href="#s-fixed">Fixed-size windows</a></li>
+      <li class="sub"><a href="#s-recursive">Recursive splitting</a></li>
+      <li class="sub"><a href="#s-sentence">Sentence packing</a></li>
+      <li class="sub"><a href="#s-structure">Follow the document</a></li>
+      <li class="sub"><a href="#s-semantic">Split on topic changes</a></li>
+      <li class="sub"><a href="#s-optimal">Whole-document segmentation</a></li>
+      <li class="sub"><a href="#s-late">Late chunking</a></li>
+      <li class="sub"><a href="#s-contextual">Contextual chunks</a></li>
+      <li class="sub"><a href="#s-hier">Small-to-big</a></li>
+      <li class="sub"><a href="#s-prop">One fact per chunk</a></li>
+      <li class="sub"><a href="#s-modal">Code &amp; tables</a></li>
+      <li><a href="#eval">How to tell if it works</a></li>
+      <li><a href="#industry">Industry cheat sheet</a></li>
+      <li><a href="#decide">Picking one</a></li>
+      <li><a href="#refs">Further reading</a></li>
+    </ol>
+  </nav>
+
+  <article>
+    <header class="hero">
+      <div class="eyebrow">Retrieval-augmented generation · ~15 min read</div>
+      <h1>The Geometry of <em>Chunks</em></h1>
+      <p class="dek">Before a RAG system can answer anything, it has to cut your documents into pieces. How you cut them decides what it can find. Here are eleven ways to do it, in plain terms, with a guide to which one fits your industry.</p>
+      <div class="byline"><span>Garage Labs · ML Engineering</span><span>September 2026</span></div>
+      <div class="ruler-wrap">
+        <svg id="hero-ruler" viewBox="0 0 820 170" role="img" aria-label="Three overlapping 512-token chunks; a 50-token answer is cut by the first chunk but fits whole in the second"></svg>
+      </div>
+      <div class="figcap">Three chunks of 512 tokens, each overlapping the next by 64. The answer (black bar) falls across the end of chunk 1, but the overlap means chunk 2 holds it whole. That one picture explains most of chunking.</div>
+    </header>
+
+    <details class="mobile-toc">
+      <summary>Contents</summary>
+      <ol>
+        <li><a href="#problem">Why chunking matters</a></li>
+        <li><a href="#laws">Three rules of thumb</a></li>
+        <li><a href="#lab">Try it yourself</a></li>
+        <li><a href="#strategies">Eleven ways to chunk</a></li>
+        <li><a href="#eval">How to tell if it works</a></li>
+        <li><a href="#industry">Industry cheat sheet</a></li>
+        <li><a href="#decide">Picking one</a></li>
+        <li><a href="#refs">Further reading</a></li>
+      </ol>
+    </details>
+
+    <!-- ============ 1 ============ -->
+    <h2 class="sec" id="problem"><span class="secnum">§1</span>Why chunking matters more than you think</h2>
+
+    <p>Picture turning a textbook into a stack of index cards so you can find things fast. Make the cards too big and each one covers so much that you can't tell what it's about. Make them too small and an explanation gets torn across three cards. Cut in the wrong places and a sentence starts on one card and ends on the next.</p>
+
+    <p>That is chunking. A RAG system splits documents into chunks, turns each chunk into a vector (a list of numbers that captures its meaning), and at question time grabs the handful of chunks whose vectors sit closest to the question's. The language model only ever sees those chunks.</p>
+
+    <p>So a good chunk has to do three things at once:</p>
+    <ul>
+      <li><strong>Hold the whole answer.</strong> If the answer is split across two chunks, the model only gets half of it. Bigger chunks help here.</li>
+      <li><strong>Be easy to find.</strong> A chunk about one thing matches questions about that thing. A chunk about five things matches nothing well. Smaller chunks help here.</li>
+      <li><strong>Fit the budget.</strong> The model can only read so much. Bigger chunks mean fewer of them fit, and more of what fits is noise.</li>
+    </ul>
+    <p>Those pull in opposite directions, and every strategy below is a different way of balancing them.</p>
+
+    <!-- ============ 2 ============ -->
+    <h2 class="sec" id="laws"><span class="secnum">§2</span>Three rules of thumb (with a little math)</h2>
+
+    <h3 id="law-dilution">Rule 1: Big chunks water down the signal</h3>
+    <p>An embedding is roughly an average of everything in the chunk. If one sentence answers the question and the other fifteen are about something else, that sentence's signal gets averaged away. In a simple model, a relevant sentence scores about</p>
+    \[
+      \text{match score} \;\approx\; \frac{\text{score of the relevant sentence}}{\sqrt{\text{number of sentences}}}
+    \]
+    <p>So <strong>one relevant sentence inside a 16-sentence chunk scores about a quarter of what it would score on its own.</strong> That is why "just make the chunks bigger" stops working.</p>
+
+    <h3 id="law-boundary">Rule 2: Overlap stops answers getting cut in half</h3>
+    <p>With chunks of size \(C\) and no overlap, an answer \(\ell\) tokens long gets split whenever it happens to cross a boundary. The chance it survives in one piece is</p>
+    \[
+      P(\text{answer fits in one chunk}) = 1 - \frac{\ell}{C}
+    \]
+    <p>A 100-token answer in 512-token chunks gets cut about 20% of the time. Add an overlap \(O\) (each chunk repeats the last \(O\) tokens of the one before), and once the overlap is at least as long as the answer, nothing gets cut.</p>
+    <div class="rule-box"><span class="lbl">Rule of thumb</span><p>Make the overlap about as long as a typical answer, not a fixed percentage. Short FAQ answers need very little overlap. Long legal clauses need a lot, and at that point it's cheaper to split along the clauses themselves (see "Follow the document").</p></div>
+    <p>The price of overlap is storage: a 64-token overlap on 512-token chunks means about 14% more chunks to embed and store.</p>
+
+    <h3 id="law-optimum">Rule 3: Aim for about three times the answer length</h3>
+    <p>Put Rules 1 and 2 together in a toy model (bigger chunks keep more answers whole but get harder to find), and the sweet spot lands at</p>
+    \[
+      \text{best chunk size} \;\approx\; 3 \times \text{typical answer length}
+    \]
+    <p>It's a simplification, but the lesson holds up: <strong>pick chunk size from how long your answers are, not from how much your embedding model can accept.</strong> Short factual answers (~60 tokens) point to ~180-token chunks. Long clauses (~250 tokens) point to ~750.</p>
+
+    <!-- ============ 3 ============ -->
+    <h2 class="sec" id="lab"><span class="secnum">§3</span>Try it yourself</h2>
+    <p>Move the sliders to see the trade-off on your own numbers. For answer length, look at a few real question-and-answer pairs from your data and count roughly how long the answers are.</p>
+
+    <div class="lab" id="labroot">
+      <div class="lab-controls">
+        <div>
+          <label for="in-C">Chunk size (tokens) <output id="o-C">512</output></label>
+          <input type="range" id="in-C" min="64" max="2048" step="32" value="512">
+        </div>
+        <div>
+          <label for="in-O">Overlap (tokens) <output id="o-O">64</output></label>
+          <input type="range" id="in-O" min="0" max="1024" step="8" value="64">
+        </div>
+        <div>
+          <label for="in-L">Typical answer length (tokens) <output id="o-L">120</output></label>
+          <input type="range" id="in-L" min="8" max="600" step="4" value="120">
+        </div>
+        <div>
+          <label for="in-N">How much text</label>
+          <select id="in-N">
+            <option value="1000000">1M tokens (a set of product manuals)</option>
+            <option value="10000000" selected>10M tokens (a mid-size knowledge base)</option>
+            <option value="100000000">100M tokens (a regulatory archive)</option>
+            <option value="1000000000">1B tokens (a whole enterprise)</option>
+          </select>
+        </div>
+        <div>
+          <label for="in-d">Embedding size</label>
+          <select id="in-d">
+            <option value="384">384</option>
+            <option value="768">768</option>
+            <option value="1024" selected>1024</option>
+            <option value="1536">1536</option>
+            <option value="3072">3072</option>
+          </select>
+        </div>
+      </div>
+      <div class="readout" aria-live="polite">
+        <div><div class="k">Answer stays whole</div><div class="v" id="r-p">—</div></div>
+        <div><div class="k">Step between chunks</div><div class="v" id="r-s">—</div></div>
+        <div><div class="k">Number of chunks</div><div class="v" id="r-m">—</div></div>
+        <div><div class="k">Extra storage</div><div class="v" id="r-k">—</div></div>
+        <div><div class="k">Index size</div><div class="v" id="r-b">—</div></div>
+      </div>
+      <div class="charts">
+        <div class="chart">
+          <h5>More overlap keeps more answers whole</h5>
+          <svg id="ch-contain" viewBox="0 0 340 210" role="img" aria-label="Chance an answer stays whole as overlap increases"></svg>
+          <div class="legend"><span><i style="background:var(--c1)"></i>answer stays whole</span><span><i style="background:var(--c3)"></i>storage cost (right axis, 1–3×)</span></div>
+        </div>
+        <div class="chart">
+          <h5>There's a sweet spot for chunk size</h5>
+          <svg id="ch-util" viewBox="0 0 340 210" role="img" aria-label="Toy score across chunk sizes, peaking at three times the answer length"></svg>
+          <div class="legend"><span><i style="background:var(--c1)"></i>no overlap</span><span><i style="background:var(--c2)"></i>with your overlap</span><span><i style="background:var(--ochre)"></i>3 × answer length</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 4 ============ -->
+    <h2 class="sec" id="strategies"><span class="secnum">§4</span>Eleven ways to chunk, from simplest to smartest</h2>
+    <p>Each one comes with a quick summary: what it does, how much work it takes to set up, what it costs to run, and where it shines.</p>
+
+    <!-- 4.1 -->
+    <h3 id="s-fixed">4.1 Fixed-size windows</h3>
+    <dl class="spec">
+      <div><dt>In one line</dt><dd>Cut every N tokens</dd></div>
+      <div><dt>Setup effort</dt><dd><span class="fit hi">Very low</span></dd></div>
+      <div><dt>Running cost</dt><dd><span class="fit hi">Lowest</span></dd></div>
+      <div><dt>Shines on</dt><dd>Logs, raw transcripts</dd></div>
+    </dl>
+    <p>Chop the text every 512 tokens (say), with a bit of overlap. It's fast, predictable, and completely blind to meaning, so it cuts sentences, tables, and even words in half. Headings get separated from the text they introduce, leaving chunks like "must be filed within 30 days" with no clue what must be filed.</p>
+    <p>Still, it's the right tool when text has no real structure, like server logs or unpunctuated speech-to-text. And it's the baseline everything else should beat.</p>
+    <p class="muted"><strong>Good for:</strong> IT operations and telecom logs · call-centre transcripts · a quick first test in any industry.</p>
+
+    <!-- 4.2 -->
+    <h3 id="s-recursive">4.2 Recursive splitting</h3>
+    <dl class="spec">
+      <div><dt>In one line</dt><dd>Paragraphs first, then smaller</dd></div>
+      <div><dt>Setup effort</dt><dd><span class="fit hi">Low</span></dd></div>
+      <div><dt>Running cost</dt><dd><span class="fit hi">Low</span></dd></div>
+      <div><dt>Shines on</dt><dd>Help articles, wikis</dd></div>
+    </dl>
+    <p>Try to split on paragraph breaks. If a piece is still too big, split it on line breaks, then sentences, then words, and only chop mid-word as a last resort. It's like a careful editor who would always rather break at a paragraph than mid-sentence.</p>
+    <p>This is the best cheap default. For most everyday documents it beats fixed windows with almost no extra effort.</p>
+    <p class="muted"><strong>Good for:</strong> SaaS help centres · internal wikis · support tickets and email threads · the first version of almost any RAG system.</p>
+
+    <!-- 4.3 -->
+    <h3 id="s-sentence">4.3 Sentence packing</h3>
+    <dl class="spec">
+      <div><dt>In one line</dt><dd>Whole sentences, evenly sized</dd></div>
+      <div><dt>Setup effort</dt><dd><span class="fit hi">Low</span></dd></div>
+      <div><dt>Running cost</dt><dd><span class="fit hi">Low</span></dd></div>
+      <div><dt>Shines on</dt><dd>News, reviews</dd></div>
+    </dl>
+    <p>Never cut a sentence, and pack sentences into chunks of roughly <em>equal</em> size. Even sizes matter more than you'd expect: by Rule 1, short chunks score higher just for being short, so a chunker that leaves a few tiny scraps ends up with those scraps crowding the results. It's the same trick word processors use to avoid one very short line at the end of a paragraph.</p>
+    <p class="muted"><strong>Good for:</strong> news and media archives · product reviews in e-commerce · punctuated call transcripts in sales.</p>
+
+    <!-- 4.4 -->
+    <h3 id="s-structure">4.4 Follow the document's structure</h3>
+    <dl class="spec">
+      <div><dt>In one line</dt><dd>Split by headings and sections</dd></div>
+      <div><dt>Setup effort</dt><dd><span class="fit md">Medium</span></dd></div>
+      <div><dt>Running cost</dt><dd><span class="fit hi">Low</span></dd></div>
+      <div><dt>Shines on</dt><dd>Contracts, filings, manuals</dd></div>
+    </dl>
+    <p>Most business documents already come divided up: chapters, sections, clauses, headings. Use those divisions. Keep each section together if it fits. If it doesn't, split it into its subsections, and keep going until everything fits. You end up cutting as few times as possible, and always along lines the author chose.</p>
+    <p>The bonus trick is a <strong>breadcrumb</strong>: start each chunk with where it lives, like <code>Services Agreement › Section 9 Liability › 9.2 Cap</code>. It costs a few tokens, makes chunks easier to find, and lets the model cite exactly where an answer came from.</p>
+    <p>The catch: it's only as good as the document parsing. A PDF with two columns and footnotes needs cleaning up before any of this works.</p>
+    <p class="muted"><strong>Good for:</strong> legal contracts and case law · financial filings (10-Ks, annual reports) · clinical guidelines · aerospace and manufacturing manuals · API documentation.</p>
+
+    <!-- 4.5 -->
+    <h3 id="s-semantic">4.5 Split where the topic changes</h3>
+    <dl class="spec">
+      <div><dt>In one line</dt><dd>Cut when meaning shifts</dd></div>
+      <div><dt>Setup effort</dt><dd><span class="fit md">Medium</span></dd></div>
+      <div><dt>Running cost</dt><dd><span class="fit md">Medium</span></dd></div>
+      <div><dt>Shines on</dt><dd>Podcasts, lectures</dd></div>
+    </dl>
+    <p>Turn each sentence into a vector and compare every sentence with the next. When two neighbours suddenly look very different, the topic has probably changed, so cut there. It's like noticing the moment a conversation moves from sport to work.</p>
+    <p>It works well on text that drifts between topics but has no headings. Two things to watch: it doesn't limit chunk size on its own, so always set a maximum. And on text where everything is on the same topic (a pile of contracts, say), it finds "changes" that aren't really there.</p>
+    <p class="muted"><strong>Good for:</strong> podcasts, lectures and webinars in media and education · long essays · messy scraped web pages.</p>
+
+    <!-- 4.6 -->
+    <h3 id="s-optimal">4.6 Whole-document segmentation</h3>
+    <dl class="spec">
+      <div><dt>In one line</dt><dd>Find the best cuts overall</dd></div>
+      <div><dt>Setup effort</dt><dd><span class="fit lo">Higher</span></dd></div>
+      <div><dt>Running cost</dt><dd><span class="fit md">Medium</span></dd></div>
+      <div><dt>Shines on</dt><dd>Meetings, patient histories</dd></div>
+    </dl>
+    <p>The previous method decides each cut on its own. This one looks at the whole document and picks the set of cuts that gives the most on-topic chunks overall. A single tuning knob sets how willing it is to add another cut. It's the difference between cutting a video wherever the shot changes and editing the whole thing so each scene holds together.</p>
+    <p>It's steadier than the local version, especially on long, unstructured conversations where the same topic comes back more than once.</p>
+    <p class="muted"><strong>Good for:</strong> earnings calls and board meetings in finance · long patient histories in healthcare · chat exports in legal investigations.</p>
+
+    <!-- 4.7 -->
+    <h3 id="s-late">4.7 Late chunking</h3>
+    <dl class="spec">
+      <div><dt>In one line</dt><dd>Read everything, then split</dd></div>
+      <div><dt>Setup effort</dt><dd><span class="fit md">Medium</span></dd></div>
+      <div><dt>Running cost</dt><dd><span class="fit md">Medium</span></dd></div>
+      <div><dt>Shines on</dt><dd>Research papers, patents</dd></div>
+    </dl>
+    <p>Normal chunking embeds each chunk in isolation, so a chunk saying "Its revenue grew 12%" has no idea what "its" means. Late chunking flips the order. A long-context embedding model reads the <em>whole document</em> first, and only then are the results divided into chunks. Every chunk's vector already "knows" what came before and after it.</p>
+    <p>You get small, precise chunks that still carry the document's context, without paying an LLM to rewrite anything.</p>
+    <p class="muted"><strong>Good for:</strong> scientific papers in pharma R&amp;D · patents · encyclopaedia-style pages · multilingual government documents.</p>
+
+    <!-- 4.8 -->
+    <h3 id="s-contextual">4.8 Contextual chunks</h3>
+    <dl class="spec">
+      <div><dt>In one line</dt><dd>Add a "you are here" note</dd></div>
+      <div><dt>Setup effort</dt><dd><span class="fit md">Medium</span></dd></div>
+      <div><dt>Running cost</dt><dd><span class="fit lo">LLM call per chunk</span></dd></div>
+      <div><dt>Shines on</dt><dd>Finance, insurance</dd></div>
+    </dl>
+    <p>Same problem, different fix: have an LLM write a sentence or two in front of each chunk to explain where it came from. "The Company's gross margin fell 2 points" becomes "<em>From ACME's Q2 2025 quarterly report, results section:</em> The Company's gross margin fell 2 points."</p>
+    <p>Anthropic's "Contextual Retrieval" write-up reported this cut failed retrievals by about a third, and by about two-thirds combined with keyword search and reranking. It costs one LLM call per chunk when you build the index, but prompt caching makes that much cheaper.</p>
+    <p class="muted"><strong>Good for:</strong> financial reports full of "the Company" and "the quarter" · insurance policies where the same clause means different things in different policies · big company knowledge bases with many near-duplicate documents.</p>
+
+    <!-- 4.9 -->
+    <h3 id="s-hier">4.9 Small-to-big (parent–child) and RAPTOR</h3>
+    <dl class="spec">
+      <div><dt>In one line</dt><dd>Search small, read big</dd></div>
+      <div><dt>Setup effort</dt><dd><span class="fit md">Medium</span></dd></div>
+      <div><dt>Running cost</dt><dd><span class="fit md">Low–medium</span></dd></div>
+      <div><dt>Shines on</dt><dd>Long reports, books</dd></div>
+    </dl>
+    <p>This one sidesteps the whole trade-off. Search over <strong>small</strong> chunks (easy to find, per Rule 1), but when one matches, hand the model its <strong>bigger parent section</strong> (enough context, per Rule 2). It's like using a book's index to find the page, then reading the whole page.</p>
+    <p><strong>RAPTOR</strong> goes further. It groups similar chunks, has an LLM summarise each group, then groups and summarises the summaries, building a tree. Big-picture questions ("what are the main risks?") match a summary, and detailed ones match an original chunk.</p>
+    <p class="muted"><strong>Good for:</strong> drug approval dossiers in pharma · government policy and legislation · textbooks and courses · due-diligence data rooms in M&amp;A.</p>
+
+    <!-- 4.10 -->
+    <h3 id="s-prop">4.10 One fact per chunk (propositions)</h3>
+    <dl class="spec">
+      <div><dt>In one line</dt><dd>Rewrite into single facts</dd></div>
+      <div><dt>Setup effort</dt><dd><span class="fit md">Medium</span></dd></div>
+      <div><dt>Running cost</dt><dd><span class="fit lo">Highest</span></dd></div>
+      <div><dt>Shines on</dt><dd>Drug info, product specs</dd></div>
+    </dl>
+    <p>Rule 1 taken to the extreme: if mixing things together blurs the signal, make every chunk exactly one fact. An LLM rewrites the text into short standalone statements, spelling out what "it" and "they" refer to. "Its revenue grew 12%" becomes "ACME's 2025 revenue grew 12%."</p>
+    <p>You get very precise matches, but a lot more chunks. A knowledge base that makes 22,000 normal chunks can turn into 400,000 facts. It's worth it where one wrong neighbouring sentence could do real harm.</p>
+    <p class="muted"><strong>Good for:</strong> drug labels and dosing in healthcare · product specs and compatibility in e-commerce · regulatory obligations in banking and energy.</p>
+
+    <!-- 4.11 -->
+    <h3 id="s-modal">4.11 Special cases: code and tables</h3>
+    <dl class="spec">
+      <div><dt>In one line</dt><dd>Respect the format</dd></div>
+      <div><dt>Setup effort</dt><dd><span class="fit md">Medium</span></dd></div>
+      <div><dt>Running cost</dt><dd><span class="fit hi">Low</span></dd></div>
+      <div><dt>Shines on</dt><dd>Codebases, spreadsheets</dd></div>
+    </dl>
+    <p><strong>Code:</strong> split by function and class, never mid-function. Start each chunk with its file name and function signature, since that's what developers search for.</p>
+    <p><strong>Tables:</strong> a number means nothing without its column header. When a table is split into groups of rows, <em>repeat the header in every chunk</em>. For very wide tables, turn each row into a sentence ("Product: X; Price: $12.50; Region: EU"). Also add one summary chunk describing the table as a whole.</p>
+    <p class="muted"><strong>Good for:</strong> coding assistants · financial statements and rate tables · parts lists in manufacturing.</p>
+
+    <!-- ============ 5 ============ -->
+    <h2 class="sec" id="eval"><span class="secnum">§5</span>How to tell if it works</h2>
+    <p>Don't pick a chunker on vibes. The good news is that testing one is simple:</p>
+    <ol class="plain">
+      <li><strong>Collect 200 or so real questions</strong> and mark where in your documents each answer actually is.</li>
+      <li><strong>Keep everything else fixed</strong>: same embedding model, same number of results, same amount of text sent to the model.</li>
+      <li><strong>For each chunker, check two things:</strong> how much of the answer text made it into the results (<em>recall</em>), and how much of the results was actually the answer rather than filler (<em>precision</em>).</li>
+      <li><strong>Pick the one with the best recall</strong>, then use cost to break ties.</li>
+    </ol>
+    <p>Measure by answer text, not by "was the right chunk in the top 5?" Chunks mean different things at different sizes, so counting chunks makes strategies impossible to compare fairly.</p>
+    <div class="rule-box"><span class="lbl">Keep an eye on cost</span><p>Strategies differ enormously in price. On a 10M-token knowledge base, plain 512-token chunks give about 22,000 vectors (around 90 MB). One-fact-per-chunk gives about 400,000 (around 1.6 GB). Contextual chunks and propositions are the only strategies that call an LLM while building the index, so use them where testing shows they pay off.</p></div>
+
+    <!-- ============ 6 ============ -->
+    <h2 class="sec" id="industry"><span class="secnum">§6</span>Industry cheat sheet</h2>
+    <p>Your industry decides how long answers usually are, how structured the documents are, and how costly a wrong answer is. Here's where to start. Treat these as first guesses to test, not final answers.</p>
+
+    <div class="tbl-wrap"><table class="matrix">
+      <thead>
+        <tr><th>Industry</th><th>Typical documents</th><th>Start with</th><th>Worth adding</th><th>Starting size</th><th>Watch out for</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Legal</td><td>Contracts, statutes, case law</td><td>Follow the structure (clauses)</td><td>Breadcrumbs; small-to-big for long agreements</td><td><span class="p">600–900 tokens</span></td><td>Wrong clause cited</td></tr>
+        <tr><td>Financial services</td><td>Annual reports, research, earnings calls</td><td>Structure + contextual notes</td><td>Table headers repeated; topic splitting for calls</td><td><span class="p">400–600 tokens</span></td><td>Mixing up companies or quarters</td></tr>
+        <tr><td>Insurance</td><td>Policy wordings, claims notes</td><td>Contextual chunks</td><td>Rate tables as rows; one fact per exclusion</td><td><span class="p">~400 tokens</span></td><td>Answer from the wrong policy</td></tr>
+        <tr><td>Healthcare</td><td>Guidelines, drug labels, patient notes</td><td>One fact per chunk (drugs); structure (guidelines)</td><td>Whole-document segmentation for patient history</td><td><span class="p">200–350 small, 1k parent</span></td><td>Unsafe neighbouring text</td></tr>
+        <tr><td>Pharma &amp; life sciences</td><td>Approval dossiers, papers, patents</td><td>Small-to-big / RAPTOR</td><td>Late chunking for papers</td><td><span class="p">256 small, 1.5k parent</span></td><td>Questions spanning many sections</td></tr>
+        <tr><td>Software</td><td>Code, API docs, tickets</td><td>Split by function (code), by heading (docs)</td><td>Keyword search for exact names</td><td><span class="p">1 function each</span></td><td>Missing exact function names</td></tr>
+        <tr><td>Customer support</td><td>Help articles, tickets, macros</td><td>Recursive splitting</td><td>One fact per known issue</td><td><span class="p">300–500 tokens</span></td><td>Outdated articles returned</td></tr>
+        <tr><td>E-commerce &amp; retail</td><td>Catalogues, specs, reviews</td><td>One product/fact per chunk</td><td>Sentence packing for reviews; filters by brand</td><td><span class="p">≤256 per product</span></td><td>Wrong product attributes</td></tr>
+        <tr><td>Media &amp; publishing</td><td>Archives, podcasts, transcripts</td><td>Split on topic changes</td><td>Timestamps; RAPTOR for "what has X said about Y"</td><td><span class="p">300–500 tokens</span></td><td>Mixed-topic chunks</td></tr>
+        <tr><td>Manufacturing &amp; aerospace</td><td>Manuals, SOPs, parts lists</td><td>Follow the structure (task)</td><td>Parts lists as rows; keep warnings with their step</td><td><span class="p">1 task ≤800</span></td><td>Steps out of order</td></tr>
+        <tr><td>Government</td><td>Legislation, policy papers</td><td>Structure + RAPTOR summaries</td><td>Late chunking for many languages</td><td><span class="p">≤800 per section</span></td><td>Outdated versions</td></tr>
+        <tr><td>Education</td><td>Textbooks, lecture videos</td><td>Small-to-big (chapter › section)</td><td>Topic splitting for lectures</td><td><span class="p">200 small, 1k parent</span></td><td>Off-syllabus answers</td></tr>
+        <tr><td>IT ops / telecom</td><td>Logs, runbooks, incident reports</td><td>Fixed windows (logs), recursive (runbooks)</td><td>Overlap = one error trace</td><td><span class="p">~200 log lines</span></td><td>Missing the matching incident</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3 id="heatmap">At a glance</h3>
+    <p>The same thing as a grid. <strong>3</strong> = start here, <strong>2</strong> = good add-on, <strong>1</strong> = rarely worth it.</p>
+    <div class="tbl-wrap"><table class="heat">
+      <thead>
+        <tr><th>Industry</th><th>Fixed</th><th>Recur.</th><th>Sent.</th><th>Struct.</th><th>Topic</th><th>Whole-doc</th><th>Late</th><th>Context</th><th>Small→big</th><th>Facts</th><th>Code/Tbl</th></tr>
+      </thead>
+      <tbody id="heat-body"></tbody>
+    </table></div>
+
+    <!-- ============ 7 ============ -->
+    <h2 class="sec" id="decide"><span class="secnum">§7</span>Picking one</h2>
+    <p>Answer these questions about your documents in order:</p>
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart TD
+  A[Your documents + ~200 real questions] --> B{Clear structure?<br/>headings, clauses, code}
+  B -- yes --> C[Follow the structure]
+  B -- no --> D{Normal sentences?}
+  D -- no --> E[Fixed windows<br/>overlap ≈ answer length]
+  D -- yes --> F{Topic jumps around<br/>without headings?}
+  F -- yes --> G[Split on topic changes]
+  F -- no --> H[Recursive splitting<br/>or sentence packing]
+  C --> I{Chunks confusing on their own?<br/>the Company, it, this quarter}
+  G --> I
+  H --> I
+  E --> I
+  I -- yes --> J[Contextual notes<br/>or late chunking]
+  I -- no --> K{Big-picture questions<br/>or long documents?}
+  J --> K
+  K -- yes --> L[Small-to-big / RAPTOR]
+  K -- no --> M{Precise facts,<br/>high stakes?}
+  L --> M
+  M -- yes --> N[One fact per chunk]
+  M -- no --> O[Ship it, then test]
+  N --> O
+</pre>
+    </div>
+
+    <p>Or the five-line version:</p>
+    <ol class="plain">
+      <li><strong>Check how long your answers are.</strong> Make chunks about 3× that, with overlap about 1×.</li>
+      <li><strong>If the document has structure, use it.</strong> It's cheap and gives you citations.</li>
+      <li><strong>Search small, read big.</strong> Parent–child gets you both with little effort.</li>
+      <li><strong>Only pay for LLM help where testing shows chunks are confusing</strong> on their own.</li>
+      <li><strong>Test on real questions</strong> before and after every change.</li>
+    </ol>
+
+    <h2 class="sec" id="refs"><span class="secnum">§8</span>Further reading</h2>
+    <ol class="refs">
+      <li>Hearst (1997), <em>TextTiling</em>: the original "split where the topic changes" method.</li>
+      <li>Liu et al. (2023), <em>Lost in the Middle</em>: why models miss information buried in long contexts.</li>
+      <li>Chen et al. (2023), <em>Dense X Retrieval</em>: the case for one-fact-per-chunk.</li>
+      <li>Sarthi et al. (2024), <em>RAPTOR</em>: tree-of-summaries retrieval.</li>
+      <li>Günther et al. (2024), <em>Late Chunking</em>: embed first, split after.</li>
+      <li>Anthropic (2024), <a href="https://www.anthropic.com/news/contextual-retrieval">Introducing Contextual Retrieval</a>.</li>
+      <li>Smith &amp; Troynikov (2024), <a href="https://research.trychroma.com/evaluating-chunking">Evaluating Chunking Strategies for Retrieval</a>, Chroma.</li>
+    </ol>
+    <p class="muted" style="font-size:15px">The rules of thumb in §2 come from deliberately simple models. Use them to pick a starting point, then let testing on your own questions decide.</p>
+  </article>
+</div>
+
+<script>
+(function () {
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs, parent, text) => {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    if (parent) parent.appendChild(n);
+    return n;
+  };
+
+  /* ---------- Hero ruler ---------- */
+  function drawRuler() {
+    const svg = document.getElementById('hero-ruler');
+    if (!svg) return;
+    svg.innerHTML = '';
+    const x0 = 30, x1 = 800, T = 1400, sx = t => x0 + (t / T) * (x1 - x0);
+    const C = 512, O = 64, S = C - O;
+    const cols = ['var(--c1)', 'var(--c2)', 'var(--c3)'];
+    const defs = el('defs', {}, svg);
+    const pat = el('pattern', { id: 'hatch', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
+    el('rect', { width: 6, height: 6, fill: 'none' }, pat);
+    el('line', { x1: 0, y1: 0, x2: 0, y2: 6, stroke: 'var(--ochre)', 'stroke-width': 2 }, pat);
+
+    for (let j = 0; j < 3; j++) {
+      const a = j * S, b = Math.min(a + C, T);
+      const y = 20 + j * 30;
+      el('rect', { x: sx(a), y, width: sx(b) - sx(a), height: 20, fill: cols[j], 'fill-opacity': 0.16, stroke: cols[j], 'stroke-width': 1.2, rx: 2 }, svg);
+      el('text', { x: sx(a) + 6, y: y + 14, fill: cols[j], 'font-family': 'JetBrains Mono, monospace', 'font-size': 11, 'font-weight': 600 }, svg, `chunk ${j + 1} · tokens ${a}–${a + C}`);
+    }
+    // overlaps
+    for (let j = 1; j < 3; j++) {
+      const a = j * S, b = (j - 1) * S + C;
+      el('rect', { x: sx(a), y: 14, width: sx(b) - sx(a), height: 102, fill: 'url(#hatch)', opacity: 0.55 }, svg);
+    }
+    // answer span
+    const sa = 490, sb = 540;
+    el('rect', { x: sx(sa), y: 118, width: sx(sb) - sx(sa), height: 10, fill: 'var(--ink)', rx: 2 }, svg);
+    el('text', { x: sx(sb) + 8, y: 127, fill: 'var(--ink)', 'font-family': 'Schibsted Grotesk, sans-serif', 'font-size': 12, 'font-weight': 600 }, svg, 'the answer: cut off by chunk 1, whole in chunk 2');
+    // axis
+    el('line', { x1: x0, y1: 142, x2: x1, y2: 142, stroke: 'var(--muted)', 'stroke-width': 1 }, svg);
+    for (let t = 0; t <= T; t += 100) {
+      const major = t % 500 === 0;
+      el('line', { x1: sx(t), y1: 142, x2: sx(t), y2: major ? 150 : 146, stroke: 'var(--muted)' }, svg);
+      if (major || t === 1400) el('text', { x: sx(t), y: 164, 'text-anchor': 'middle', fill: 'var(--muted)', 'font-family': 'JetBrains Mono, monospace', 'font-size': 10 }, svg, t);
+    }
+    el('text', { x: x1, y: 164, 'text-anchor': 'end', fill: 'var(--muted)', 'font-family': 'JetBrains Mono, monospace', 'font-size': 10 }, svg, '');
+    el('text', { x: sx(700), y: 164, 'text-anchor': 'middle', fill: 'var(--muted)', 'font-family': 'JetBrains Mono, monospace', 'font-size': 10 }, svg, 'token position →');
+  }
+
+  /* ---------- Chart helper ---------- */
+  function chart(svg, opts) {
+    svg.innerHTML = '';
+    const W = 340, H = 210, L = 40, R = opts.right ? 34 : 12, Tp = 10, B = 34;
+    const iw = W - L - R, ih = H - Tp - B;
+    const [xa, xb] = opts.x, [ya, yb] = opts.y;
+    const X = v => L + ((v - xa) / (xb - xa)) * iw;
+    const Y = v => Tp + ih - ((v - ya) / (yb - ya)) * ih;
+    opts.yTicks.forEach(t => {
+      el('line', { x1: L, x2: L + iw, y1: Y(t), y2: Y(t), class: 'grid' }, svg);
+      el('text', { x: L - 6, y: Y(t) + 3, 'text-anchor': 'end', class: 'axt' }, svg, opts.yFmt ? opts.yFmt(t) : t);
+    });
+    el('line', { x1: L, x2: L + iw, y1: Tp + ih, y2: Tp + ih, class: 'ax' }, svg);
+    opts.xTicks.forEach(t => {
+      el('line', { x1: X(t), x2: X(t), y1: Tp + ih, y2: Tp + ih + 4, class: 'ax' }, svg);
+      el('text', { x: X(t), y: Tp + ih + 16, 'text-anchor': 'middle', class: 'axt' }, svg, t);
+    });
+    el('text', { x: L + iw / 2, y: H - 2, 'text-anchor': 'middle', class: 'axt' }, svg, opts.xLabel);
+    if (opts.right) {
+      const [ra, rb] = opts.right.domain;
+      const YR = v => Tp + ih - ((v - ra) / (rb - ra)) * ih;
+      opts.right.ticks.forEach(t => el('text', { x: L + iw + 6, y: YR(t) + 3, class: 'axt' }, svg, t + '×'));
+      opts.right.series.forEach(s => {
+        const d = s.pts.map((p, i) => (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ',' + YR(Math.min(rb, p[1])).toFixed(1)).join('');
+        el('path', { d, fill: 'none', stroke: s.color, 'stroke-width': 1.6, 'stroke-dasharray': '4 3' }, svg);
+      });
+    }
+    opts.series.forEach(s => {
+      const d = s.pts.map((p, i) => (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ',' + Y(p[1]).toFixed(1)).join('');
+      el('path', { d, fill: 'none', stroke: s.color, 'stroke-width': 2 }, svg);
+    });
+    (opts.vlines || []).forEach(v => {
+      if (v.x < xa || v.x > xb) return;
+      el('line', { x1: X(v.x), x2: X(v.x), y1: Tp, y2: Tp + ih, stroke: v.color, 'stroke-width': 1.2, 'stroke-dasharray': '3 3' }, svg);
+    });
+    (opts.dots || []).forEach(p => {
+      if (p.x < xa || p.x > xb) return;
+      el('circle', { cx: X(p.x), cy: Y(p.y), r: 4.5, fill: p.color, stroke: 'var(--surface)', 'stroke-width': 2 }, svg);
+    });
+  }
+
+  /* ---------- Lab ---------- */
+  const $ = id => document.getElementById(id);
+  const inC = $('in-C'), inO = $('in-O'), inL = $('in-L'), inN = $('in-N'), inD = $('in-d');
+  const pContain = (C, O, l) => (l > C ? 0 : Math.min(1, Math.max(0, (C - l) / (C - O))));
+  const fmtBytes = b => b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : b >= 1e6 ? (b / 1e6).toFixed(1) + ' MB' : (b / 1e3).toFixed(0) + ' KB';
+
+  function update() {
+    let C = +inC.value, O = +inO.value, l = +inL.value;
+    inO.max = C - 8;
+    if (O > C - 8) { O = C - 8; inO.value = O; }
+    const N = +inN.value, d = +inD.value, S = C - O;
+    $('o-C').textContent = C; $('o-O').textContent = O; $('o-L').textContent = l;
+    const p = pContain(C, O, l);
+    const m = Math.ceil(Math.max(N - O, 1) / S);
+    $('r-p').textContent = (p * 100).toFixed(1) + '%';
+    $('r-s').textContent = S;
+    $('r-m').textContent = m.toLocaleString('en-US');
+    $('r-k').textContent = (C / S).toFixed(2) + '×';
+    $('r-b').textContent = fmtBytes(m * d * 4);
+
+    // Chart 1: P vs O
+    const pts = [], kap = [];
+    for (let o = 0; o <= C - 8; o += Math.max(1, Math.floor(C / 120))) {
+      pts.push([o, pContain(C, o, l)]);
+      kap.push([o, C / (C - o)]);
+    }
+    const xMax = C - 8;
+    const step = xMax > 1200 ? 500 : xMax > 600 ? 200 : xMax > 250 ? 100 : 50;
+    const xt = []; for (let t = 0; t <= xMax; t += step) xt.push(t);
+    chart($('ch-contain'), {
+      x: [0, xMax], y: [0, 1], xTicks: xt, yTicks: [0, .25, .5, .75, 1],
+      yFmt: t => Math.round(t * 100) + '%', xLabel: 'overlap (tokens)',
+      series: [{ pts, color: 'var(--c1)' }],
+      right: { domain: [1, 3], ticks: [1, 2, 3], series: [{ pts: kap, color: 'var(--c3)' }] },
+      vlines: [{ x: l, color: 'var(--ochre)' }],
+      dots: [{ x: O, y: p, color: 'var(--c1)' }]
+    });
+
+    // Chart 2: toy utility vs C
+    const r = O / C;
+    const u0 = [], u1 = [];
+    const Cmax = 2048;
+    for (let c = Math.max(l + 1, 16); c <= Cmax; c += 8) {
+      u0.push([c, Math.max(0, 1 - l / c) / Math.sqrt(c)]);
+      const s = c * (1 - r);
+      u1.push([c, (s > 0 ? Math.min(1, Math.max(0, (c - l) / s)) : 1) / Math.sqrt(c)]);
+    }
+    const mx = Math.max(...u0.map(p => p[1]), ...u1.map(p => p[1]));
+    u0.forEach(p => p[1] /= mx); u1.forEach(p => p[1] /= mx);
+    const cStar = 3 * l;
+    const uStar = (1 - 1 / 3) / Math.sqrt(cStar) / mx;
+    chart($('ch-util'), {
+      x: [0, Cmax], y: [0, 1], xTicks: [0, 512, 1024, 1536, 2048], yTicks: [0, .5, 1],
+      yFmt: t => t.toFixed(1), xLabel: 'chunk size (tokens)',
+      series: [{ pts: u0, color: 'var(--c1)' }, { pts: u1, color: 'var(--c2)' }],
+      vlines: [{ x: cStar, color: 'var(--ochre)' }, { x: C, color: 'var(--muted)' }],
+      dots: [{ x: cStar, y: uStar, color: 'var(--ochre)' }]
+    });
+  }
+  [inC, inO, inL].forEach(i => i.addEventListener('input', update));
+  [inN, inD].forEach(i => i.addEventListener('change', update));
+
+  /* ---------- Heatmap ---------- */
+  const heat = [
+    ['Legal',                     [1,2,2,3,1,2,3,2,3,2,1]],
+    ['Financial services',        [1,2,2,3,1,3,2,3,2,2,3]],
+    ['Insurance',                 [1,2,2,3,1,1,2,3,2,3,3]],
+    ['Healthcare (clinical)',     [1,2,2,3,1,3,2,2,2,3,2]],
+    ['Pharma & life sciences',    [1,2,2,3,2,1,3,2,3,2,3]],
+    ['Software & dev tools',      [1,2,1,3,1,1,2,2,2,1,3]],
+    ['Customer support / SaaS',   [2,3,2,2,2,1,1,2,2,3,1]],
+    ['E-commerce & retail',       [1,2,3,1,2,1,1,2,1,3,3]],
+    ['Media & publishing',        [2,2,3,1,3,3,2,2,3,1,1]],
+    ['Manufacturing & aerospace', [1,2,1,3,1,1,1,2,2,2,3]],
+    ['Government & public sector',[1,2,2,3,2,2,3,2,3,2,2]],
+    ['Education & e-learning',    [1,2,2,3,3,2,2,1,3,2,1]],
+    ['IT ops / telecom',          [3,3,1,2,1,2,1,2,1,1,2]]
+  ];
+  const hb = document.getElementById('heat-body');
+  heat.forEach(([name, vals]) => {
+    const tr = document.createElement('tr');
+    const th = document.createElement('td'); th.textContent = name; tr.appendChild(th);
+    vals.forEach(v => { const td = document.createElement('td'); td.textContent = v; td.className = 'h' + v + 'c'; tr.appendChild(td); });
+    hb.appendChild(tr);
+  });
+
+  drawRuler();
+  update();
+})();
+</script>
