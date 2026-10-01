@@ -1,0 +1,108 @@
+// Source-of-truth schema.
+//
+// Local development uses SQLite. For production (Vercel), scripts/prisma-generate.mjs
+// derives prisma/postgres/schema.prisma from this file when DATABASE_URL points at
+// PostgreSQL (e.g. Supabase), so the models are defined exactly once.
+//
+// Keep the schema portable: no SQLite- or Postgres-specific column types.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Student {
+  id          String       @id @default(cuid())
+  name        String
+  email       String       @unique
+  createdAt   DateTime     @default(now()) @map("created_at")
+  submissions Submission[]
+
+  @@map("students")
+}
+
+model Assessment {
+  id          String       @id @default(cuid())
+  slug        String       @unique
+  title       String
+  description String       @default("")
+  maxScore    Int          @map("max_score")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  questions   Question[]
+  submissions Submission[]
+
+  @@map("assessments")
+}
+
+model Question {
+  id           String     @id @default(cuid())
+  assessmentId String     @map("assessment_id")
+  // Short instructor-facing label used in analytics (e.g. "RAG pipeline sequence").
+  label        String
+  questionText String     @map("question_text")
+  // "single" | "multiple"
+  questionType String     @map("question_type")
+  points       Int
+  displayOrder Int        @map("display_order")
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  options      Option[]
+  answers      Answer[]
+
+  @@unique([assessmentId, displayOrder])
+  @@map("questions")
+}
+
+model Option {
+  id           String   @id @default(cuid())
+  questionId   String   @map("question_id")
+  optionText   String   @map("option_text")
+  // Canonical position (A=1, B=2, ...). Students see options shuffled.
+  displayOrder Int      @map("display_order")
+  // SENSITIVE: never select this field in student-facing queries.
+  isCorrect    Boolean  @default(false) @map("is_correct")
+  question     Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, displayOrder])
+  @@map("options")
+}
+
+model Submission {
+  // Client-generated UUID, used as an idempotency key so retries / double clicks
+  // never create a second submission.
+  id           String     @id
+  assessmentId String     @map("assessment_id")
+  studentId    String     @map("student_id")
+  score        Int
+  maxScore     Int        @map("max_score")
+  percentage   Float
+  submittedAt  DateTime   @default(now()) @map("submitted_at")
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers      Answer[]
+
+  // One attempt per student per assessment.
+  @@unique([assessmentId, studentId])
+  @@index([submittedAt])
+  @@map("submissions")
+}
+
+model Answer {
+  id                String     @id @default(cuid())
+  submissionId      String     @map("submission_id")
+  questionId        String     @map("question_id")
+  // JSON-encoded array of option IDs (portable across SQLite and PostgreSQL).
+  selectedOptionIds String     @map("selected_option_ids")
+  // Computed server-side at submission time; used for instructor analytics.
+  isCorrect         Boolean    @map("is_correct")
+  pointsAwarded     Int        @map("points_awarded")
+  submission        Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  question          Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, questionId])
+  @@index([questionId])
+  @@map("answers")
+}
