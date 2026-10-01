@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #13233a;
+  --color-ink-soft: #3d4b5f;
+  --color-muted: #6b7686;
+  --color-line: #dde2e9;
+  --color-paper: #f6f5f1;
+  --color-brand: #1d3a63;
+  --color-brand-dark: #142b4b;
+  --color-brand-tint: #e8eef7;
+  --color-accent: #9a6b1f;
+  --color-danger: #a12c2c;
+  --color-success: #2f6b3f;
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+@utility card {
+  @apply rounded-xl border border-line bg-white shadow-[0_1px_2px_rgba(19,35,58,0.04)];
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@utility btn-primary {
+  @apply btn bg-brand text-white hover:bg-brand-dark;
+}
+
+@utility btn-secondary {
+  @apply btn border border-line bg-white text-ink hover:bg-paper;
+}
+
+@utility field {
+  @apply w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-base text-ink placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20;
+}
+
+@utility label {
+  @apply mb-1.5 block text-sm font-medium text-ink-soft;
+}
